@@ -1,0 +1,267 @@
+<title>Стенд GWO+Boids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500&display=swap">
+<style>
+/* Layout: инструментальная панель — пульт сверху, два синхронных «экрана» рядом, под ними график и сводка */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --ink:#18212b; --muted:#5d6b78; --line:#d5dbe1;
+  --a:#2357c6; --b:#c27a0e; --target:#d33a2c; --viol:#c2187a; --ok:#2f8a4f; --grid:#e6eaee;
+  --chip:#e3e8ee;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161c; --panel:#18202a; --ink:#e3e9ef; --muted:#93a1ae; --line:#2b3642;
+  --a:#6f9bff; --b:#f0a53a; --target:#ff6b5b; --viol:#ff5cb4; --ok:#5cc282; --grid:#222c37; --chip:#24303c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161c; --panel:#18202a; --ink:#e3e9ef; --muted:#93a1ae; --line:#2b3642;
+  --a:#6f9bff; --b:#f0a53a; --target:#ff6b5b; --viol:#ff5cb4; --ok:#5cc282; --grid:#222c37; --chip:#24303c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body)}
+.wrap>*{min-width:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:grid;gap:16px}
+header{display:grid;gap:4px}
+h1{font:500 22px/1.25 var(--f-display);margin:0;text-wrap:balance;letter-spacing:.01em}
+.sub{color:var(--muted);margin:0;max-width:75ch}
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center}
+.grp{display:flex;flex-direction:column;gap:4px;min-width:0}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button,.btn,select{font:inherit;font-size:13px;color:var(--ink);background:var(--chip);border:1px solid transparent;border-radius:6px;padding:5px 10px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+select{padding-right:6px}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.play{display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex:1 1 320px;min-width:0}
+.play input[type=range]{flex:1 1 160px;min-width:0;accent-color:var(--ink)}
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.scr{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:grid;min-width:0}
+.scr-h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%}
+canvas{display:block;width:100%}
+.scr canvas{aspect-ratio:1/1;height:auto;max-width:100%}
+.read{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.read div{background:var(--panel);padding:8px 12px;display:grid;gap:2px;min-width:0}
+.read b{font:600 16px var(--f-mono);font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--ink)}
+.pill.bad{background:var(--viol);color:#fff}.pill.good{background:var(--ok);color:#fff}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;min-width:0}
+h2{font:600 15px/1.3 var(--f-body);margin:0}
+.tbl{overflow-x:auto;min-width:0;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-weight:500;color:var(--muted);font-size:12px}
+td.num{white-space:nowrap}
+tr.cur-a td:first-child{box-shadow:inset 3px 0 var(--a)}tr.cur-b td:first-child{box-shadow:inset 3px 0 var(--b)}
+.paper{color:var(--muted)}
+.note{color:var(--muted);font-size:13px;margin:0;max-width:90ch}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Стенд законов группового наведения: проигрыватель испытаний</h1>
+    <p class="sub">Проигрыватель испытаний, посчитанных стендом. Слева и справа — один и тот же старт (тот же сид), разные алгоритмы. Красная линия между аппаратами — сближение ближе 5 м.</p>
+  </header>
+
+  <section class="bar" aria-label="Параметры">
+    <div class="grp"><span class="lbl">Сценарий</span><div class="seg" id="scen"></div></div>
+    <div class="grp"><span class="lbl">Модуль Boids</span><div class="seg" id="prof"></div></div>
+    <div class="grp"><span class="lbl">Испытание (сид)</span>
+      <div class="row"><button class="btn" id="prev" aria-label="Предыдущее испытание">‹</button>
+        <select id="seed" aria-label="Номер испытания"></select>
+        <button class="btn" id="next" aria-label="Следующее испытание">›</button></div></div>
+    <div class="grp"><span class="lbl">Вид</span><div class="seg" id="view"></div></div>
+  </section>
+
+  <section class="bar" aria-label="Воспроизведение">
+    <div class="play">
+      <button class="btn" id="playbtn" style="min-width:92px">▶ Пуск</button>
+      <button class="btn" id="stepb" aria-label="Шаг назад">−1</button>
+      <button class="btn" id="stepf" aria-label="Шаг вперёд">+1</button>
+      <input type="range" id="k" min="0" max="30" value="0" aria-label="Итерация">
+      <span class="num" id="klbl" style="min-width:110px">k = 0 из 30</span>
+    </div>
+    <div class="grp"><span class="lbl">Скорость</span><div class="seg" id="speed"></div></div>
+  </section>
+
+  <section class="screens">
+    <article class="scr" id="scrA"></article>
+    <article class="scr" id="scrB"></article>
+  </section>
+
+  <section class="card">
+    <h2>Минимальная дистанция между аппаратами в этом испытании</h2>
+    <canvas id="chart" height="190" aria-label="График минимальной дистанции"></canvas>
+    <div class="legend"><span><i class="sw" style="background:var(--a)"></i>левый экран</span><span><i class="sw" style="background:var(--b)"></i>правый экран</span><span><i class="sw" style="background:var(--viol)"></i>порог d_min = 5 м</span><span>кружок — момент захвата</span></div>
+  </section>
+
+  <section class="card">
+    <h2 id="tblh">Сводка по 100 испытаниям</h2>
+    <div class="tbl"><table id="tbl"></table></div>
+    <p class="note">«Нарушения» — число испытаний из 100, где хоть раз два аппарата были ближе 5 м; в скобках — только до шага захвата (при радиусе захвата 5 м два аппарата у цели почти неизбежно ближе 5 м друг к другу). Кнопки A и B загружают вариант на левый или правый экран.</p>
+  </section>
+
+  <section class="card">
+    <h2>Откуда модель</h2>
+    <p class="note">Базовая модель — по работе Акимова и др. (Информационно-управляющие системы, 2025, № 6): Δt = 1 с, V<sub>max</sub> = 10 м/с, a<sub>max</sub> = 2 м/с², 4 аппарата, R<sub>cap</sub> = d<sub>min</sub> = 5 м, k<sub>s</sub> = k<sub>a</sub> = k<sub>c</sub> = 0,1, k<sub>max</sub> = 30; GWO с центроидом цели в роли «добычи», вес a(k)/(2√2). Порядок обновления — положение по скорости прошлого шага. Не заданы в исходной работе и выбраны стендом: радиус соседства 30 м, нулевая начальная скорость, случайный курс цели.</p>
+  </section>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function(){
+const D = JSON.parse(document.getElementById('data').textContent);
+const T = D.meta.t_max, DMIN = D.meta.d_min, RCAP = D.meta.r_capture;
+const LAWS = Object.keys(D.laws);
+const st = {scen:'s1', prof:'paper', seed:0, k:0, view:'all', playing:false, speed:3,
+  A:{law:'gwo', boids:1}, B:{law:'parallel', boids:1}};
+try{ const s = JSON.parse(localStorage.getItem('gwoviewer')||'null'); if(s){ Object.assign(st, s, {playing:false, k:0}); } }catch(e){}
+const save=()=>{ try{ localStorage.setItem('gwoviewer', JSON.stringify({scen:st.scen,prof:st.prof,seed:st.seed,view:st.view,speed:st.speed,A:st.A,B:st.B})); }catch(e){} };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const vname = v => D.laws[v.law] + (v.boids ? ' + Boids' : '');
+const key = v => `${st.scen}|${(st.prof==='safe' && !v.boids)?'paper':st.prof}|${v.law}|${v.boids}`;
+const trial = v => D.runs[key(v)][st.seed];
+const pos = (tr,k) => { const kk=Math.min(k,tr.P.length-1); const a=tr.P[kk]; const out=[]; for(let i=0;i<a.length;i+=2) out.push([a[i]/10,a[i+1]/10]); return out; };
+const tgt = (tr,k) => { const q=tr.Q[Math.min(k,tr.Q.length-1)]; return [q[0]/10,q[1]/10]; };
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+function minPair(p){ let m=Infinity, pr=null; for(let i=0;i<p.length;i++)for(let j=i+1;j<p.length;j++){const d=dist(p[i],p[j]); if(d<m){m=d;pr=[i,j];}} return [m,pr]; }
+function minTgt(p,q){ return Math.min(...p.map(x=>dist(x,q))); }
+const fmt = x => (x==null||Number.isNaN(x)) ? '—' : String(Math.round(x*10)/10).replace('.',',');
+
+// ---- controls
+function seg(id, items, getter, setter){
+  const el=document.getElementById(id); el.innerHTML='';
+  for(const [v,label] of items){ const b=document.createElement('button'); b.textContent=label; b.type='button';
+    b.setAttribute('aria-pressed', String(getter()===v)); b.onclick=()=>{ setter(v); render(true); }; el.appendChild(b); }
+}
+function controls(){
+  seg('scen', [['s1','1 · неподвижная'],['s2v10','2 · 10 м/с'],['s2v5','2 · 5 м/с']], ()=>st.scen, v=>{st.scen=v; st.k=0;});
+  seg('prof', [['paper','базовый'],['safe','k_s = 100']], ()=>st.prof, v=>{st.prof=v; st.k=0;});
+  seg('view', [['all','вся сцена'],['near','у цели ±40 м']], ()=>st.view, v=>{st.view=v;});
+  seg('speed', [[1,'×1'],[3,'×3'],[6,'×6']], ()=>st.speed, v=>{st.speed=v;});
+  const sel=document.getElementById('seed'); if(!sel.options.length){ for(let s=0;s<D.meta.seeds;s++){const o=document.createElement('option');o.value=s;o.textContent='№ '+s;sel.appendChild(o);} }
+  sel.value=st.seed;
+}
+document.getElementById('seed').onchange=e=>{st.seed=+e.target.value; st.k=0; render(true);};
+document.getElementById('prev').onclick=()=>{st.seed=(st.seed+D.meta.seeds-1)%D.meta.seeds; st.k=0; render(true);};
+document.getElementById('next').onclick=()=>{st.seed=(st.seed+1)%D.meta.seeds; st.k=0; render(true);};
+const kin=document.getElementById('k');
+kin.oninput=e=>{st.k=+e.target.value; stop(); draw();};
+document.getElementById('stepb').onclick=()=>{st.k=Math.max(0,st.k-1); stop(); draw();};
+document.getElementById('stepf').onclick=()=>{st.k=Math.min(lastK(),st.k+1); stop(); draw();};
+const pb=document.getElementById('playbtn');
+pb.onclick=()=>{ if(st.playing) stop(); else { if(st.k>=lastK()) st.k=0; st.playing=true; pb.textContent='❚❚ Пауза'; tick(); } };
+function stop(){ st.playing=false; pb.textContent='▶ Пуск'; }
+function lastK(){ return Math.max(trial(st.A).P.length, trial(st.B).P.length)-1; }
+let timer=null;
+function tick(){ clearTimeout(timer); if(!st.playing) return; draw();
+  if(st.k>=lastK()){ stop(); return; } timer=setTimeout(()=>{ st.k++; tick(); }, 900/st.speed); }
+document.addEventListener('keydown',e=>{ if(e.target.tagName==='SELECT'||e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){e.preventDefault(); pb.click();} if(e.code==='ArrowRight'){st.k=Math.min(lastK(),st.k+1);stop();draw();} if(e.code==='ArrowLeft'){st.k=Math.max(0,st.k-1);stop();draw();} });
+
+// ---- screens
+function screen(side){
+  const el=document.getElementById('scr'+side), v=st[side];
+  const opts = LAWS.map(l=>[0,1].map(b=>`<option value="${l}|${b}" ${v.law===l&&v.boids===b?'selected':''}>${D.laws[l]}${b?' + Boids':''}</option>`).join('')).join('');
+  el.innerHTML = `<div class="scr-h"><span class="tag"><i class="dot" style="background:var(--${side.toLowerCase()})"></i>${side==='A'?'Левый':'Правый'} экран</span>
+    <select aria-label="Алгоритм, ${side==='A'?'левый':'правый'} экран">${opts}</select></div>
+    <canvas width="600" height="600"></canvas>
+    <div class="read"><div><span class="lbl">до цели</span><b data-r="t">—</b></div><div><span class="lbl">между аппаратами</span><b data-r="p">—</b></div><div><span class="lbl">исход</span><span data-r="s"></span></div></div>`;
+  el.querySelector('select').onchange=e=>{ const [l,b]=e.target.value.split('|'); st[side]={law:l,boids:+b}; render(true); };
+}
+function bounds(){
+  if(st.view==='near'){ return null; }
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const v of [st.A,st.B]){ const tr=trial(v); for(let k=0;k<tr.P.length;k++){ for(const p of pos(tr,k).concat([tgt(tr,k)])){ x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]); } } }
+  const cx=(x0+x1)/2, cy=(y0+y1)/2, h=Math.max(x1-x0,y1-y0)/2+15; return [cx,cy,h];
+}
+function drawScreen(side, B){
+  const v=st[side], tr=trial(v), cv=document.querySelector('#scr'+side+' canvas'), g=cv.getContext('2d');
+  const W=cv.width, k=Math.min(st.k, tr.P.length-1), p=pos(tr,k), q=tgt(tr,k);
+  const [cx,cy,h] = B || [q[0],q[1],40];
+  const s=W/(2*h), X=x=>(x-cx)*s+W/2, Y=y=>W/2-(y-cy)*s;
+  g.fillStyle=css('--panel'); g.fillRect(0,0,W,W);
+  // сетка: шаг 10/50 м
+  const step = h>80?50:10; g.strokeStyle=css('--grid'); g.lineWidth=1; g.beginPath();
+  for(let x=Math.ceil((cx-h)/step)*step;x<=cx+h;x+=step){g.moveTo(X(x),0);g.lineTo(X(x),W);}
+  for(let y=Math.ceil((cy-h)/step)*step;y<=cy+h;y+=step){g.moveTo(0,Y(y));g.lineTo(W,Y(y));}
+  g.stroke();
+  g.fillStyle=css('--muted'); g.font='12px '+css('--f-mono'); g.fillText(`сетка ${step} м`, 10, W-12);
+  // след цели
+  g.strokeStyle=css('--target'); g.globalAlpha=.35; g.setLineDash([4,4]); g.beginPath();
+  for(let j=0;j<=k;j++){const t=tgt(tr,j); j?g.lineTo(X(t[0]),Y(t[1])):g.moveTo(X(t[0]),Y(t[1]));} g.stroke(); g.setLineDash([]); g.globalAlpha=1;
+  // зона захвата
+  g.strokeStyle=css('--target'); g.lineWidth=1.5; g.beginPath(); g.arc(X(q[0]),Y(q[1]),Math.max(RCAP*s,3),0,7); g.stroke();
+  // следы аппаратов
+  const col=css('--'+side.toLowerCase());
+  g.strokeStyle=col; g.lineWidth=1.2; g.globalAlpha=.45;
+  for(let i=0;i<p.length;i++){ g.beginPath(); for(let j=0;j<=k;j++){const a=pos(tr,j)[i]; j?g.lineTo(X(a[0]),Y(a[1])):g.moveTo(X(a[0]),Y(a[1]));} g.stroke(); }
+  g.globalAlpha=1;
+  // нарушения: пары ближе d_min
+  g.strokeStyle=css('--viol'); g.lineWidth=3;
+  for(let i=0;i<p.length;i++)for(let j=i+1;j<p.length;j++) if(dist(p[i],p[j])<DMIN){ g.beginPath(); g.moveTo(X(p[i][0]),Y(p[i][1])); g.lineTo(X(p[j][0]),Y(p[j][1])); g.stroke();
+    g.beginPath(); g.arc((X(p[i][0])+X(p[j][0]))/2,(Y(p[i][1])+Y(p[j][1]))/2,14,0,7); g.lineWidth=1.5; g.stroke(); g.lineWidth=3; }
+  // аппараты
+  for(const a of p){ g.fillStyle=col; g.beginPath(); g.arc(X(a[0]),Y(a[1]),6,0,7); g.fill(); g.strokeStyle=css('--panel'); g.lineWidth=1.5; g.stroke(); }
+  // цель
+  g.fillStyle=css('--target'); g.beginPath(); const tx=X(q[0]),ty=Y(q[1]); g.moveTo(tx,ty-8); g.lineTo(tx+7,ty+5); g.lineTo(tx-7,ty+5); g.closePath(); g.fill();
+  // показания
+  const el=document.getElementById('scr'+side), [mp]=minPair(p), mt=minTgt(p,q);
+  el.querySelector('[data-r=t]').textContent=fmt(mt)+' м';
+  const pe=el.querySelector('[data-r=p]'); pe.textContent=fmt(mp)+' м'; pe.style.color = mp<DMIN?css('--viol'):'';
+  let viol=false; for(let j=0;j<=k;j++) if(minPair(pos(tr,j))[0]<DMIN) viol=true;
+  const sEl=el.querySelector('[data-r=s]');
+  const cap = tr.t!=null && k>=tr.t;
+  sEl.innerHTML = (cap?`<span class="pill good">захват, k = ${tr.t}</span>`: (k>=tr.P.length-1 && tr.t==null ? `<span class="pill">не захвачено к 30</span>`:`<span class="pill">летит</span>`))
+    + (viol?` <span class="pill bad">было &lt; 5 м</span>`:'');
+}
+function drawChart(){
+  const cv=document.getElementById('chart'), dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=190;
+  cv.width=w*dpr; cv.height=h*dpr; const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle=css('--panel'); g.fillRect(0,0,w,h);
+  const L=40,R=10,Tp=10,Bt=26, ser={};
+  let ymax=10; for(const s of ['A','B']){ const tr=trial(st[s]); ser[s]=tr.P.map((_,j)=>minPair(pos(tr,j))[0]); ymax=Math.max(ymax,...ser[s]); }
+  ymax=Math.ceil(ymax/10)*10;
+  const X=k=>L+(w-L-R)*k/T, Y=y=>Tp+(h-Tp-Bt)*(1-y/ymax);
+  g.strokeStyle=css('--grid'); g.fillStyle=css('--muted'); g.font='11px '+css('--f-mono'); g.lineWidth=1;
+  const ys = ymax>40?20:10;
+  for(let y=0;y<=ymax;y+=ys){ g.beginPath(); g.moveTo(L,Y(y)); g.lineTo(w-R,Y(y)); g.stroke(); g.fillText(String(y),6,Y(y)+4); }
+  for(let k=0;k<=T;k+=5){ g.fillText(String(k),X(k)-4,h-8); }
+  g.fillText('м',6,Tp+2); g.textAlign='right'; g.fillText('итерация →',w-R,Tp+2); g.textAlign='left';
+  g.strokeStyle=css('--viol'); g.setLineDash([5,4]); g.beginPath(); g.moveTo(L,Y(DMIN)); g.lineTo(w-R,Y(DMIN)); g.stroke(); g.setLineDash([]);
+  for(const s of ['A','B']){ const col=css('--'+s.toLowerCase()), d=ser[s], tr=trial(st[s]);
+    g.strokeStyle=col; g.lineWidth=2; g.beginPath(); d.forEach((y,k)=>k?g.lineTo(X(k),Y(y)):g.moveTo(X(k),Y(y))); g.stroke();
+    if(tr.t!=null){ g.beginPath(); g.arc(X(tr.t),Y(d[tr.t]),4.5,0,7); g.fillStyle=css('--panel'); g.fill(); g.lineWidth=2; g.stroke(); }
+  }
+  g.strokeStyle=css('--ink'); g.globalAlpha=.5; g.lineWidth=1; g.beginPath(); g.moveTo(X(st.k),Tp); g.lineTo(X(st.k),h-Bt); g.stroke(); g.globalAlpha=1;
+}
+function table(){
+  const sc=D.scenarios[st.scen], pr=D.profiles[st.prof];
+  document.getElementById('tblh').textContent=`Сводка по ${D.meta.stat_seeds} испытаниям · ${sc} · ${pr}`;
+  let html='<thead><tr><th>Алгоритм</th><th>Захват, %</th><th>Медиана [IQR], итераций</th><th>Нарушения на 100 (до захвата)</th><th></th></tr></thead><tbody>';
+  for(const l of LAWS) for(const b of [0,1]){ const v={law:l,boids:b}, s=D.stats[key(v)];
+    const cls = (st.A.law===l&&st.A.boids===b?'cur-a ':'')+(st.B.law===l&&st.B.boids===b?'cur-b':'');
+    html+=`<tr class="${cls}"><td>${vname(v)}</td><td class="num">${fmt(s.capture_pct)}</td><td class="num">${s.median==null?'—':fmt(s.median)+' ['+fmt(s.q25)+'–'+fmt(s.q75)+']'}</td><td class="num">${fmt(s.collisions_per_100)} (${fmt(s.collisions_pre_per_100)})</td>
+      <td><div class="row"><button class="btn" data-l="${l}" data-b="${b}" data-s="A" aria-label="На левый экран">A</button><button class="btn" data-l="${l}" data-b="${b}" data-s="B" aria-label="На правый экран">B</button></div></td></tr>`; }
+  html+='</tbody>'; const t=document.getElementById('tbl'); t.innerHTML=html;
+  t.querySelectorAll('button[data-s]').forEach(bt=>bt.onclick=()=>{ st[bt.dataset.s]={law:bt.dataset.l,boids:+bt.dataset.b}; render(true); });
+}
+function draw(){
+  kin.max=lastK(); kin.value=st.k;
+  document.getElementById('klbl').textContent=`k = ${st.k} из ${lastK()}`;
+  const B=bounds(); drawScreen('A',B); drawScreen('B',B); drawChart();
+}
+function render(full){ if(full){ controls(); screen('A'); screen('B'); table(); save(); } st.k=Math.min(st.k,lastK()); draw(); }
+window.addEventListener('resize',()=>drawChart());
+if(window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>draw());
+new MutationObserver(()=>draw()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+render(true);
+})();
+</script>

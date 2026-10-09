@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.DS_Store
+
+# результаты расчётов
+results/
+independent_check_meta/out_*.csv
+independent_check_multi/out_*.txt
+independent_check_multi/grid.json
+
+# промежуточные данные просмотрщика (viewer.html собирается из них)
+viewer/data.json
